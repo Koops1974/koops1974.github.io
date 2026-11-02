@@ -1,11 +1,11 @@
 {
-  "version": "1793647080462",
+  "version": "1793647141341",
   "settings": {
     "defaultDuration": 10,
     "fit": "contain",
     "background": "#000000",
     "transition": 700,
-    "showClock": true,
+    "showClock": false,
     "pollSeconds": 60,
     "reloadHour": 4
   },
