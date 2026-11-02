@@ -155,10 +155,10 @@
 
     <div class="grid">
       <label class="field"><span>GitHub username</span>
-        <input id="owner" type="text" placeholder="your-username" autocomplete="off" spellcheck="false">
+        <input id="owner" type="text" value="Koops1974" autocomplete="off" spellcheck="false">
       </label>
       <label class="field"><span>Repository name</span>
-        <input id="repo" type="text" placeholder="shop-signage" autocomplete="off" spellcheck="false">
+        <input id="repo" type="text" value="koops1974.github.io" autocomplete="off" spellcheck="false">
       </label>
       <label class="field"><span>Branch</span>
         <input id="branch" type="text" value="main" autocomplete="off" spellcheck="false">
@@ -362,7 +362,11 @@
   function describeError(status, body) {
     if (status === 401) return 'Token rejected (401). Check the token, or it may have expired.';
     if (status === 403) return 'GitHub refused the request (403). The token probably lacks Contents write permission, or you hit a rate limit.';
-    if (status === 404) return 'Repository or file not found (404). Check the username, repo name and branch.';
+    if (status === 404) {
+      return 'Not found (404): "' + state.cfg.owner + '/' + state.cfg.repo + '" on branch "' + state.cfg.branch + '". ' +
+        'Check the repository name (it is koops1974.github.io if the repo was renamed), the branch, ' +
+        'and that the token has access to this repository.';
+    }
     if (status === 409) return 'Someone else changed the playlist at the same time (409). Press Reload, then try again.';
     if (status === 422) return 'GitHub rejected the change (422). ' + (body && body.message ? body.message : '');
     return 'GitHub error ' + status + (body && body.message ? ': ' + body.message : '');
@@ -771,6 +775,11 @@
       try {
         var cfg = JSON.parse(stored);
         if (cfg && cfg.owner && cfg.repo && cfg.token) {
+          // The repository was renamed after the first version shipped.
+          if (cfg.repo === 'SignagePlayer') {
+            cfg.repo = 'koops1974.github.io';
+            localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+          }
           state.cfg = cfg;
           $('owner').value = cfg.owner;
           $('repo').value = cfg.repo;
