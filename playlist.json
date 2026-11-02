@@ -1,5 +1,5 @@
 {
-  "version": "1793638216352",
+  "version": "1793638222919",
   "settings": {
     "defaultDuration": 10,
     "fit": "contain",
@@ -12,10 +12,6 @@
   "items": [
     {
       "src": "media/welcome.svg",
-      "duration": 10
-    },
-    {
-      "src": "media/how-to.svg",
       "duration": 10
     },
     {
