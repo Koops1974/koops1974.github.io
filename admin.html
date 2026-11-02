@@ -537,6 +537,7 @@
     return 'https://raw.githubusercontent.com/' +
       encodeURIComponent(state.cfg.owner) + '/' +
       encodeURIComponent(state.cfg.repo) + '/' +
+      encodeURIComponent(state.cfg.branch) + '/' +
       path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now();
   }
 
@@ -824,7 +825,7 @@
 
   $('saveBtn').addEventListener('click', function () {
     save().then(function () {
-      toast('Saved — screens update within a minute');
+      toast('Saved — screens update within a minute or two');
       showMsg('editorMsg', '', '');
     }).catch(function (err) {
       showMsg('editorMsg', 'err', err.message);
