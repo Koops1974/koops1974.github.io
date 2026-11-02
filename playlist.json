@@ -1,5 +1,5 @@
 {
-  "version": "1793638521248",
+  "version": "1793638709684",
   "settings": {
     "defaultDuration": 10,
     "fit": "contain",
@@ -15,6 +15,9 @@
     },
     {
       "src": "media/mvzhy8o1-wwwu-signage-02.jpg"
+    },
+    {
+      "src": "media/mvzi6c20-amd9-christmas-01.jpg"
     }
   ]
 }
