@@ -11,7 +11,12 @@ No server, no build step, no CMS. GitHub Pages hosts it for free.
 | | |
 |---|---|
 | Player | https://koops1974.github.io/ |
-| Admin | https://koops1974.github.io/admin.html |
+| Admin — **open, no login** | https://philips-signage.pages.dev/admin |
+| Admin — token mode (GitHub Pages) | https://koops1974.github.io/admin.html |
+
+> The open admin is for testing only: anyone who has the link can change the
+> playlist. Protect it with Cloudflare Access before sharing the URL widely
+> (see [Open admin](#open-admin-cloudflare-pages)).
 
 The repository is named `koops1974.github.io`, which makes it a GitHub *user site*,
 so the address has no path at all. That matters in practice: project-site paths are
@@ -25,6 +30,47 @@ any old or mistyped path back to the player.
  playlist.json   the content list (auto-written by admin.html)
  media/          uploaded pictures and videos
 ```
+
+---
+
+## Open admin (Cloudflare Pages)
+
+`https://philips-signage.pages.dev/admin` runs the same editor with no token
+prompt. The GitHub token lives in the Cloudflare project as an encrypted secret;
+the browser only talks to `/api/github` on the same origin.
+
+How it is put together:
+
+```
+admin.html              the editor (detects /api/health and skips the token screen)
+functions/api/health.js tells the page it is on the server-backed host
+functions/api/github.js proxies GET/PUT to the GitHub Contents API
+```
+
+Project settings (Cloudflare dashboard → Workers & Pages → `philips-signage`):
+
+| Name | Value |
+|---|---|
+| `GITHUB_TOKEN` | fine-grained token, *Contents: Read and write* (secret) |
+| `GITHUB_OWNER` | `Koops1974` |
+| `GITHUB_REPO` | `koops1974.github.io` |
+| `GITHUB_BRANCH` | `main` |
+| `PLAYER_URL` | `https://koops1974.github.io/` |
+
+Content changes (pictures, playlist) do **not** need a redeploy — they are
+committed straight to GitHub. Only edits to `admin.html` or `functions/` do:
+
+```bash
+npx wrangler pages deploy . --project-name philips-signage --branch main
+```
+
+### Add real logins later
+
+Cloudflare **Zero Trust → Access → Applications → Add an application →
+Self-hosted**, domain `philips-signage.pages.dev`, path `admin*` (add a second
+one for `api/*`). Policy: *Allow* → *Emails* → list the staff addresses, and
+turn on **One-time PIN** as the login method. No code changes are needed; the
+admin keeps working exactly as it does now, behind the login screen.
 
 ---
 
