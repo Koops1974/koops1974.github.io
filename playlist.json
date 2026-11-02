@@ -1,5 +1,5 @@
 {
-  "version": "1793638722857",
+  "version": "1793644173200",
   "settings": {
     "defaultDuration": 10,
     "fit": "contain",
@@ -10,12 +10,6 @@
     "reloadHour": 4
   },
   "items": [
-    {
-      "src": "media/mvzhvrzw-fl6k-signage-01.jpg"
-    },
-    {
-      "src": "media/mvzhy8o1-wwwu-signage-02.jpg"
-    },
     {
       "src": "media/mvzi6c20-amd9-christmas-01.jpg"
     },
