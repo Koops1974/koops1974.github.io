@@ -1,0 +1,17 @@
+{
+  "version": "1793647037845",
+  "settings": {
+    "defaultDuration": 10,
+    "fit": "contain",
+    "background": "#000000",
+    "transition": 700,
+    "showClock": false,
+    "pollSeconds": 60,
+    "reloadHour": 4
+  },
+  "items": [
+    {
+      "src": "media/mvzn4uq2-bx3q-christmas-01.jpg"
+    }
+  ]
+}
