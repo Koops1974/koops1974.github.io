@@ -1,5 +1,5 @@
 {
-  "version": "1",
+  "version": "1793638216352",
   "settings": {
     "defaultDuration": 10,
     "fit": "contain",
@@ -10,7 +10,16 @@
     "reloadHour": 4
   },
   "items": [
-    { "src": "media/welcome.svg", "duration": 10 },
-    { "src": "media/how-to.svg", "duration": 10 }
+    {
+      "src": "media/welcome.svg",
+      "duration": 10
+    },
+    {
+      "src": "media/how-to.svg",
+      "duration": 10
+    },
+    {
+      "src": "media/mvzhvrzw-fl6k-signage-01.jpg"
+    }
   ]
 }
