@@ -6,6 +6,19 @@ URL; the page plays a playlist of pictures and videos, changing every 10 seconds
 
 No server, no build step, no CMS. GitHub Pages hosts it for free.
 
+**This copy is live at:**
+
+| | |
+|---|---|
+| Player | https://koops1974.github.io/ |
+| Admin | https://koops1974.github.io/admin.html |
+
+The repository is named `koops1974.github.io`, which makes it a GitHub *user site*,
+so the address has no path at all. That matters in practice: project-site paths are
+case-sensitive (`/SignagePlayer/` works, `/signageplayer/` returns a 404), which is a
+common support call when someone types the address on a phone. A `404.html` redirects
+any old or mistyped path back to the player.
+
 ```
  index.html      the player  -> this is the URL the screens open
  admin.html      the editor  -> where staff add pictures and press Save
