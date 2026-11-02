@@ -32,6 +32,8 @@
   header .brand span { color: #8fb4ff; }
   header .status { margin-left: auto; font-size: 13px; color: #a9b0bd; }
   header .status b { color: #7fe3a0; font-weight: 600; }
+  header button.small { background: transparent; border-color: #39404d; color: #d5dae2; }
+  header button.small:hover { background: #1e232c; color: #fff; }
   main { max-width: 860px; margin: 0 auto; padding: 20px 16px 8px; }
   .card {
     background: var(--card); border: 1px solid var(--line);
@@ -144,6 +146,7 @@
 <header>
   <div class="brand">Signage <span>admin</span></div>
   <div class="status" id="status">Not connected</div>
+  <button id="changeCfg" class="small" type="button" hidden>Change</button>
 </header>
 
 <main>
@@ -266,6 +269,8 @@
   var $ = function (id) { return document.getElementById(id); };
   var state = {
     cfg: { owner: '', repo: '', branch: 'main', token: '' },
+    serverMode: false,
+    serverInfo: null,
     playlistPath: 'playlist.json',
     playlist: null,
     sha: null,
@@ -340,7 +345,7 @@
     return new TextDecoder().decode(bytes);
   }
 
-  /* ---------------- GitHub API ---------------- */
+  /* ---------------- GitHub API (direct, or via the /api proxy) ---------------- */
 
   function repoApi(path) {
     var p = path ? path.split('/').map(encodeURIComponent).join('/') : '';
@@ -359,6 +364,14 @@
     return h;
   }
 
+  function contentsUrl(path, ref) {
+    var r = ref || state.cfg.branch;
+    if (state.serverMode) {
+      return '/api/github?path=' + encodeURIComponent(path || '') + '&ref=' + encodeURIComponent(r);
+    }
+    return repoApi(path) + '?ref=' + encodeURIComponent(r);
+  }
+
   function describeError(status, body) {
     if (status === 401) return 'Token rejected (401). Check the token, or it may have expired.';
     if (status === 403) return 'GitHub refused the request (403). The token probably lacks Contents write permission, or you hit a rate limit.';
@@ -373,8 +386,9 @@
   }
 
   async function readFile(path) {
-    var res = await fetch(repoApi(path) + '?ref=' + encodeURIComponent(state.cfg.branch), {
-      headers: headers(), cache: 'no-store'
+    var res = await fetch(contentsUrl(path), {
+      headers: state.serverMode ? {} : headers(),
+      cache: 'no-store'
     });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(describeError(res.status, await res.json().catch(function () { return null; })));
@@ -383,8 +397,9 @@
   }
 
   async function listRoot() {
-    var res = await fetch(repoApi('') + '?ref=' + encodeURIComponent(state.cfg.branch), {
-      headers: headers(), cache: 'no-store'
+    var res = await fetch(contentsUrl(''), {
+      headers: state.serverMode ? {} : headers(),
+      cache: 'no-store'
     });
     if (res.status === 404) return [];
     if (!res.ok) throw new Error(describeError(res.status, await res.json().catch(function () { return null; })));
@@ -395,11 +410,23 @@
   async function putFile(path, body, message, sha) {
     var payload = { message: message, branch: state.cfg.branch, content: body };
     if (sha) payload.sha = sha;
-    var res = await fetch(repoApi(path), {
-      method: 'PUT',
-      headers: headers({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload)
-    });
+
+    var res;
+    if (state.serverMode) {
+      payload.path = path;
+      res = await fetch('/api/github', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      res = await fetch(repoApi(path), {
+        method: 'PUT',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+      });
+    }
+
     if (!res.ok) throw new Error(describeError(res.status, await res.json().catch(function () { return null; })));
     return res.json();
   }
@@ -474,20 +501,8 @@
         return e.type === 'file' && /^playlist.*\.json$/i.test(e.name);
       }).map(function (e) { return e.name; });
 
-      if (!files.length) files = ['playlist.json'];
-      if (files.indexOf('playlist.json') < 0) files.unshift('playlist.json');
-
-      var savedPath = localStorage.getItem(PATH_KEY);
-      var path = files.indexOf(savedPath) >= 0 ? savedPath : files[0];
-
-      fillPlaylistSelect(files, path);
-      await openPlaylist(path);
-
-      $('setup').hidden = true;
-      $('editor').hidden = false;
-      $('settingsCard').hidden = false;
-      $('linksCard').hidden = false;
-      $('status').innerHTML = 'Connected to <b>' + escapeHtml(owner + '/' + repo) + '</b>';
+      await startEditor(files);
+      revealEditor(owner + '/' + repo);
       showMsg('editorMsg', '', '');
       toast('Connected');
     } catch (err) {
@@ -496,6 +511,27 @@
     } finally {
       setBusy(false);
     }
+  }
+
+  async function startEditor(files) {
+    files = Array.isArray(files) ? files.slice() : [];
+    if (!files.length) files = ['playlist.json'];
+    if (files.indexOf('playlist.json') < 0) files.unshift('playlist.json');
+
+    var savedPath = localStorage.getItem(PATH_KEY);
+    var path = files.indexOf(savedPath) >= 0 ? savedPath : files[0];
+
+    fillPlaylistSelect(files, path);
+    await openPlaylist(path);
+  }
+
+  function revealEditor(label) {
+    $('setup').hidden = true;
+    $('editor').hidden = false;
+    $('settingsCard').hidden = false;
+    $('linksCard').hidden = false;
+    $('changeCfg').hidden = !!state.serverMode;
+    $('status').innerHTML = 'Connected to <b>' + escapeHtml(label) + '</b>';
   }
 
   function fillPlaylistSelect(files, selected) {
@@ -689,11 +725,12 @@
   }
 
   function playerUrlFor(file) {
-    var dir = location.href.replace(/[^\/]*$/, '');
-    var url = dir + 'index.html';
+    var dir = (state.serverMode && state.serverInfo && state.serverInfo.player)
+      ? String(state.serverInfo.player)
+      : location.href.replace(/[^\/]*$/, '');
+    if (!/\/$/.test(dir)) dir += '/';
     var screen = screenNameFor(file);
-    if (screen) url += '?screen=' + encodeURIComponent(screen);
-    return url;
+    return screen ? dir + '?screen=' + encodeURIComponent(screen) : dir;
   }
 
   function updateLinks() {
@@ -770,28 +807,65 @@
   /* ---------------- wiring ---------------- */
 
   function bootUi() {
+    // If the site is hosted on Cloudflare Pages (with /api), the GitHub token
+    // lives on the server and the admin needs no login or token entry.
+    fetch('/api/health', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (info) {
+        if (info && info.ok && info.configured) startServerMode(info);
+        else startTokenMode();
+      })
+      .catch(function () { startTokenMode(); });
+  }
+
+  function startServerMode(info) {
+    state.serverMode = true;
+    state.serverInfo = info;
+    state.cfg = {
+      owner: info.owner || '',
+      repo: info.repo || '',
+      branch: info.branch || 'main',
+      token: ''
+    };
+
+    revealEditor(state.cfg.owner + '/' + state.cfg.repo);
+    setBusy(true);
+    startEditor([])
+      .then(function () { toast('Connected'); })
+      .catch(function (err) { showMsg('editorMsg', 'err', err.message); })
+      .then(function () { setBusy(false); });
+  }
+
+  function startTokenMode() {
     var stored = localStorage.getItem(CFG_KEY);
-    if (stored) {
-      try {
-        var cfg = JSON.parse(stored);
-        if (cfg && cfg.owner && cfg.repo && cfg.token) {
-          // The repository was renamed after the first version shipped.
-          if (cfg.repo === 'SignagePlayer') {
-            cfg.repo = 'koops1974.github.io';
-            localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
-          }
-          state.cfg = cfg;
-          $('owner').value = cfg.owner;
-          $('repo').value = cfg.repo;
-          $('branch').value = cfg.branch || 'main';
-          $('token').value = cfg.token;
-          connect();
+    if (!stored) return;
+    try {
+      var cfg = JSON.parse(stored);
+      if (cfg && cfg.owner && cfg.repo && cfg.token) {
+        // The repository was renamed after the first version shipped.
+        if (cfg.repo === 'SignagePlayer') {
+          cfg.repo = 'koops1974.github.io';
+          localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
         }
-      } catch (e) {}
-    }
+        state.cfg = cfg;
+        $('owner').value = cfg.owner;
+        $('repo').value = cfg.repo;
+        $('branch').value = cfg.branch || 'main';
+        $('token').value = cfg.token;
+        connect();
+      }
+    } catch (e) {}
   }
 
   $('connect').addEventListener('click', connect);
+
+  $('changeCfg').addEventListener('click', function () {
+    // Let people see or replace the saved token/repo instead of being locked
+    // into whichever credentials this device remembered.
+    $('setup').hidden = false;
+    $('changeCfg').hidden = true;
+    $('setup').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   $('forget').addEventListener('click', function () {
     if (!confirm('Forget the saved token on this device?')) return;
     localStorage.removeItem(CFG_KEY);
