@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="robots" content="noindex">
+<title>Signage</title>
+<link rel="icon" href="data:,">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body {
+    color: #fff; cursor: none;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body.debug { cursor: auto; }
+
+  #stage { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: #000; }
+
+  .slide {
+    position: absolute; top: 0; right: 0; bottom: 0; left: 0;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0;
+    transition: opacity var(--fade, 700ms) linear;
+  }
+  .slide.in { opacity: 1; }
+  .slide .media {
+    display: block; width: 100%; height: 100%;
+    object-fit: contain;
+    -webkit-backface-visibility: hidden;
+  }
+  .slide.cover .media { object-fit: cover; }
+
+  #clock {
+    position: fixed; right: 2.5vw; bottom: 2.5vh;
+    font-size: 3vh; line-height: 1; font-variant-numeric: tabular-nums;
+    opacity: .9; text-shadow: 0 2px 14px rgba(0,0,0,.7);
+    z-index: 5; pointer-events: none;
+  }
+
+  #notice {
+    position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 6vw; background: #000; z-index: 8;
+  }
+  #notice[hidden] { display: none; }
+  .card { max-width: 900px; text-align: center; }
+  .card h1 { font-size: clamp(22px, 4vh, 56px); line-height: 1.15; margin: 0 0 18px; font-weight: 600; letter-spacing: -.01em; }
+  .card p { font-size: clamp(13px, 1.9vh, 24px); line-height: 1.55; color: #b9b9c2; margin: 10px 0; }
+  .card code { color: #fff; background: #1b1b21; padding: 2px 8px; border-radius: 6px; font: .85em ui-monospace, Consolas, monospace; word-break: break-all; }
+
+  #hud {
+    position: fixed; left: 12px; bottom: 12px; z-index: 20;
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    font: 12px/1.4 ui-monospace, Consolas, monospace;
+    background: rgba(10,10,14,.88); border: 1px solid #2a2a35;
+    padding: 8px 10px; border-radius: 10px; max-width: calc(100% - 24px);
+  }
+  #hud[hidden] { display: none; }
+  #hud b { font-weight: 600; color: #7fe3a0; }
+  #hud .sep { color: #44444f; }
+  #hud button {
+    font: inherit; color: #fff; background: #242430; border: 1px solid #3a3a4a;
+    padding: 4px 8px; border-radius: 6px; cursor: pointer;
+  }
+  #hud button:hover { background: #2f2f3d; }
+  #hud button:active { transform: translateY(1px); }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="clock" hidden></div>
+  <div id="notice" hidden><div class="card" id="noticeCard"></div></div>
+  <div id="hud" hidden></div>
+
+  <noscript>
+    <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:8vw;text-align:center;">
+      JavaScript must be enabled for the playlist to play.
+    </div>
+  </noscript>
+
+<script>
+(function () {
+  'use strict';
+
+  var DEFAULTS = {
+    defaultDuration: 10,
+    fit: 'contain',
+    background: '#000000',
+    transition: 700,
+    showClock: false,
+    pollSeconds: 60,
+    reloadHour: 4,
+    cacheBust: false
+  };
+
+  var params = new URLSearchParams(location.search);
+  var screenId = String(params.get('screen') || '').replace(/[^a-z0-9_-]/gi, '');
+  var DEBUG = params.has('debug');
+  var FORCE_RELOAD_MIN = Number(params.get('reload')) || 0;
+
+  var stage = document.getElementById('stage');
+  var noticeEl = document.getElementById('notice');
+  var noticeCard = document.getElementById('noticeCard');
+  var clockEl = document.getElementById('clock');
+  var hud = document.getElementById('hud');
+
+  var state = {
+    settings: assign({}, DEFAULTS),
+    version: '',
+    items: [],
+    index: -1,
+    timer: 0,
+    token: 0,
+    slide: null,
+    media: {},
+    bad: {},
+    raw: '',
+    pollTimer: 0,
+    clockTimer: 0,
+    playlistFile: '',
+    lastBeat: Date.now(),
+    startedAt: Date.now(),
+    lastReload: ''
+  };
+
+  function assign(target) {
+    for (var i = 1; i < arguments.length; i++) {
+      var src = arguments[i];
+      if (!src) continue;
+      for (var k in src) if (Object.prototype.hasOwnProperty.call(src, k)) target[k] = src[k];
+    }
+    return target;
+  }
+
+  function notice(html) {
+    noticeCard.innerHTML = html;
+    noticeEl.hidden = false;
+  }
+  function hideNotice() {
+    noticeEl.hidden = true;
+    noticeCard.innerHTML = '';
+  }
+
+  /* ---------- playlist loading ---------- */
+
+  function candidateFiles() {
+    var list = [];
+    if (screenId) list.push('playlist-' + screenId + '.json');
+    list.push('playlist.json');
+    return list;
+  }
+
+  function fetchJson(url) {
+    return fetch(url + (url.indexOf('?') < 0 ? '?' : '&') + '_=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+
+  function loadPlaylist() {
+    var files = candidateFiles();
+    var i = 0;
+
+    function attempt() {
+      if (i >= files.length) return Promise.resolve(null);
+      var url = files[i++];
+      return fetchJson(url).then(function (json) {
+        if (json && Array.isArray(json.items)) {
+          state.playlistFile = url;
+          return json;
+        }
+        return attempt();
+      });
+    }
+    return attempt();
+  }
+
+  function absUrl(src) {
+    try { return new URL(src, location.href).href; }
+    catch (e) { return src; }
+  }
+
+  function versioned(url) {
+    // Files uploaded through admin.html get unique names, so they never need
+    // cache busting. Turn `cacheBust` on if you replace files in place instead.
+    if (!state.settings || state.settings.cacheBust !== true) return url;
+    if (!state.version) return url;
+    try {
+      var u = new URL(url, location.href);
+      if (u.origin !== location.origin) return url;
+      if (u.searchParams.has('v')) return url;
+      u.searchParams.set('v', state.version);
+      return u.href;
+    } catch (e) { return url; }
+  }
+
+  function normalize(raw) {
+    if (!raw || typeof raw !== 'object' || !raw.src) return null;
+    var src = versioned(absUrl(String(raw.src)));
+    var type = raw.type
+      ? String(raw.type)
+      : (/\.(mp4|webm|m4v|mov)(\?|$)/i.test(src) ? 'video' : 'image');
+    return {
+      src: src,
+      type: type === 'video' ? 'video' : 'image',
+      label: raw.label ? String(raw.label) : '',
+      duration: Number(raw.duration) > 0 ? Number(raw.duration) : 0,
+      fit: raw.fit === 'cover' || raw.fit === 'contain' ? raw.fit : '',
+      muted: raw.muted !== false,
+      loop: !!raw.loop
+    };
+  }
+
+  /* ---------- rendering ---------- */
+
+  function getMedia(item) {
+    var cached = state.media[item.src];
+    if (cached) return cached;
+
+    var el;
+    if (item.type === 'video') {
+      el = document.createElement('video');
+      el.preload = 'auto';
+      el.playsInline = true;
+      el.setAttribute('playsinline', '');
+      el.setAttribute('webkit-playsinline', '');
+      el.muted = item.muted;
+      el.loop = item.loop;
+      el.src = item.src;
+    } else {
+      el = new Image();
+      el.decoding = 'async';
+      el.src = item.src;
+    }
+    el.className = 'media';
+    state.media[item.src] = el;
+    return el;
+  }
+
+  function fadeMs() {
+    var n = Number(state.settings.transition);
+    return isFinite(n) && n >= 0 ? n : 700;
+  }
+
+  function slideSeconds(item) {
+    return item.duration || Number(state.settings.defaultDuration) || 10;
+  }
+
+  function render(item) {
+    var myToken = ++state.token;
+    var media = getMedia(item);
+
+    var layer = document.createElement('div');
+    layer.className = 'slide' + ((item.fit || state.settings.fit) === 'cover' ? ' cover' : '');
+    layer.setAttribute('data-src', item.src);
+    layer.appendChild(media);
+    stage.appendChild(layer);
+
+    // Force layout so the fade actually animates on first paint.
+    void layer.offsetWidth;
+    layer.classList.add('in');
+
+    var prev = state.slide;
+    state.slide = layer;
+    if (prev) {
+      prev.classList.remove('in');
+      setTimeout(function () {
+        if (prev.parentNode) prev.parentNode.removeChild(prev);
+      }, fadeMs() + 150);
+    }
+
+    if (item.type === 'video') {
+      try { media.currentTime = 0; } catch (e) {}
+      media.muted = item.muted;
+      media.loop = item.loop;
+
+      media.addEventListener('error', function () {
+        if (myToken !== state.token) return;
+        state.bad[item.src] = true;
+        schedule(600, showNext);
+      }, { once: true });
+
+      media.addEventListener('ended', function () {
+        if (myToken === state.token) showNext();
+      }, { once: true });
+
+      var played = media.play();
+      if (played && typeof played.catch === 'function') {
+        played.catch(function () {
+          if (myToken === state.token) schedule(1200, showNext);
+        });
+      }
+
+      if (item.duration > 0) {
+        schedule(slideSeconds(item) * 1000, showNext);
+      } else {
+        var len = isFinite(media.duration) && media.duration > 0 ? media.duration : 30;
+        schedule(len * 1000 + 20000, showNext);
+      }
+      return;
+    }
+
+    media.onerror = function () {
+      if (myToken !== state.token) return;
+      state.bad[item.src] = true;
+      schedule(600, showNext);
+    };
+    if (media.complete && media.naturalWidth === 0) {
+      media.onerror();
+      return;
+    }
+    schedule(slideSeconds(item) * 1000, showNext);
+  }
+
+  function schedule(ms, fn) {
+    clearTimeout(state.timer);
+    state.timer = setTimeout(fn || showNext, Math.max(0, ms));
+  }
+
+  function showNext() {
+    clearTimeout(state.timer);
+    state.timer = 0;
+
+    var count = state.items.length;
+    if (!count) return;
+
+    var chosen = null;
+    for (var i = 0; i < count; i++) {
+      state.index = (state.index + 1) % count;
+      var candidate = state.items[state.index];
+      if (state.bad[candidate.src]) continue;
+      chosen = candidate;
+      break;
+    }
+
+    if (!chosen) {
+      notice(
+        '<h1>Media not loading</h1>' +
+        '<p>The playlist loaded, but none of the files could be opened.</p>' +
+        '<p>Check the file names inside <code>playlist.json</code>, and make sure the files were uploaded to the <code>media/</code> folder.</p>' +
+        '<p style="opacity:.55">Retrying…</p>'
+      );
+      schedule(15000, refreshPlaylist);
+      return;
+    }
+
+    // A single picture should just stay on screen instead of fading to itself.
+    if (count === 1 && chosen.type === 'image' && state.slide &&
+        state.slide.getAttribute('data-src') === chosen.src) {
+      schedule(slideSeconds(chosen) * 1000, showNext);
+      return;
+    }
+
+    hideNotice();
+    render(chosen);
+  }
+
+  function preloadAll() {
+    for (var i = 0; i < state.items.length; i++) getMedia(state.items[i]);
+  }
+
+  function applyPlaylist(json) {
+    state.raw = JSON.stringify(json);
+    state.settings = assign({}, DEFAULTS, json.settings || {});
+    state.version = json.version != null ? String(json.version) : '';
+    state.items = (json.items || []).map(normalize).filter(Boolean);
+    state.index = -1;
+    state.bad = {};
+    state.token++;
+
+    // Drop preloaded media that is no longer in the playlist.
+    var keep = {};
+    for (var i = 0; i < state.items.length; i++) keep[state.items[i].src] = true;
+    for (var key in state.media) {
+      if (!keep[key]) {
+        var el = state.media[key];
+        if (el && el.tagName === 'VIDEO') { try { el.pause(); el.removeAttribute('src'); el.load(); } catch (e) {} }
+        delete state.media[key];
+      }
+    }
+
+    applyStyle();
+    startClock();
+    startNightlyReload();
+    setupPolling();
+
+    if (!state.items.length) {
+      notice(
+        '<h1>No content yet</h1>' +
+        '<p>Open <code>admin.html</code> on your phone or laptop to add pictures, or edit <code>playlist.json</code> directly in the repository.</p>' +
+        '<p style="opacity:.55">' + escapeHtml(state.playlistFile || 'playlist.json') + '</p>'
+      );
+      return;
+    }
+
+    hideNotice();
+    preloadAll();
+    showNext();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function applyStyle() {
+    var bg = state.settings.background || '#000000';
+    document.body.style.background = bg;
+    stage.style.background = bg;
+    document.documentElement.style.setProperty('--fade', fadeMs() + 'ms');
+    clockEl.hidden = !state.settings.showClock;
+  }
+
+  /* ---------- clock ---------- */
+
+  function startClock() {
+    clearInterval(state.clockTimer);
+    if (!state.settings.showClock) { clockEl.hidden = true; return; }
+    clockEl.hidden = false;
+    tickClock();
+    state.clockTimer = setInterval(tickClock, 10000);
+  }
+
+  function tickClock() {
+    var now = new Date();
+    var hh = String(now.getHours()).padStart(2, '0');
+    var mm = String(now.getMinutes()).padStart(2, '0');
+    clockEl.textContent = hh + ':' + mm;
+  }
+
+  /* ---------- live updates ---------- */
+
+  function setupPolling() {
+    clearInterval(state.pollTimer);
+    var secs = Math.max(15, Number(state.settings.pollSeconds) || 60);
+    state.pollTimer = setInterval(refreshPlaylist, secs * 1000);
+  }
+
+  function refreshPlaylist() {
+    loadPlaylist().then(function (json) {
+      if (!json) return;
+      if (JSON.stringify(json) !== state.raw) applyPlaylist(json);
+    });
+  }
+
+  /* ---------- self healing ---------- */
+
+  function hardReload(reason) {
+    try { console.warn('[signage] reloading:', reason); } catch (e) {}
+    location.reload();
+  }
+
+  function startWatchdog() {
+    // If the browser tab freezes or the renderer stalls, timers stop firing.
+    // When we wake up and notice a big gap while visible, reload the page.
+    setInterval(function () {
+      var now = Date.now();
+      if (document.visibilityState === 'visible' && now - state.lastBeat > 12000) {
+        hardReload('stalled');
+      }
+      state.lastBeat = now;
+    }, 2000);
+
+    document.addEventListener('visibilitychange', function () {
+      state.lastBeat = Date.now();
+      if (document.visibilityState === 'visible') {
+        keepAwake();
+        refreshPlaylist();
+      }
+    });
+
+    window.addEventListener('online', refreshPlaylist);
+    window.addEventListener('offline', function () {
+      try { console.warn('[signage] offline'); } catch (e) {}
+    });
+
+    window.addEventListener('error', function (ev) {
+      try { console.error('[signage]', ev.message); } catch (e) {}
+    });
+
+    if (FORCE_RELOAD_MIN > 0) {
+      setInterval(function () { hardReload('scheduled'); }, FORCE_RELOAD_MIN * 60000);
+    }
+  }
+
+  function startNightlyReload() {
+    clearTimeout(state.reloadTimer);
+    var hour = Number(state.settings.reloadHour);
+    if (!isFinite(hour) || hour < 0 || hour > 23) return;
+
+    var now = new Date();
+    var next = new Date(now.getTime());
+    next.setHours(hour, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+
+    state.reloadTimer = setTimeout(function () { hardReload('nightly'); }, next - now);
+  }
+
+  function keepAwake() {
+    if (!navigator.wakeLock || !navigator.wakeLock.request) return;
+    navigator.wakeLock.request('screen').catch(function () {});
+  }
+
+  /* ---------- debug hud ---------- */
+
+  function setupHud() {
+    hud.hidden = false;
+    hud.innerHTML =
+      '<span><b>live</b></span><span class="sep">|</span>' +
+      '<span id="hudInfo"></span><span class="sep">|</span>' +
+      '<button id="hudNext" type="button">next</button>' +
+      '<button id="hudReload" type="button">reload</button>';
+
+    document.getElementById('hudNext').addEventListener('click', function () { showNext(); });
+    document.getElementById('hudReload').addEventListener('click', function () { hardReload('manual'); });
+
+    setInterval(function () {
+      var info = document.getElementById('hudInfo');
+      if (!info) return;
+      var item = state.items[state.index];
+      var name = item ? (item.label || item.src.split('/').pop()) : '—';
+      var mins = Math.floor((Date.now() - state.startedAt) / 60000);
+      info.textContent =
+        (screenId || 'all') + ' · ' +
+        (state.items.length ? (state.index + 1) + '/' + state.items.length : '0/0') + ' · ' +
+        name + ' · ' + mins + 'm · ' + (state.playlistFile || 'playlist.json');
+    }, 1000);
+  }
+
+  /* ---------- boot ---------- */
+
+  function boot() {
+    if (DEBUG) {
+      document.body.classList.add('debug');
+      setupHud();
+    }
+    document.title = screenId ? 'Signage — ' + screenId : 'Signage';
+    keepAwake();
+
+    loadPlaylist().then(function (json) {
+      if (!json) {
+        notice(
+          '<h1>Can’t load the playlist</h1>' +
+          '<p>Tried <code>' + escapeHtml(location.host + location.pathname) + '</code></p>' +
+          '<p>Check the internet connection on the screen. Retrying every 15 seconds…</p>'
+        );
+        setTimeout(boot, 15000);
+        return;
+      }
+      applyPlaylist(json);
+    });
+
+    startWatchdog();
+
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key === 'ArrowRight' || ev.key === ' ' || ev.key === 'PageDown') {
+        ev.preventDefault();
+        showNext();
+      } else if (ev.key === 'r' || ev.key === 'R') {
+        hardReload('manual');
+      }
+    });
+
+    stage.addEventListener('click', function () { showNext(); });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

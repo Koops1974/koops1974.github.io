@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101418"/>
+      <stop offset="1" stop-color="#000000"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#g)"/>
+  <g font-family="system-ui, 'Segoe UI', Arial, sans-serif" fill="#ffffff">
+    <text x="140" y="360" font-size="34" letter-spacing="10" fill="#7fe3a0" font-weight="600">HOW TO CHANGE IT</text>
+    <text x="140" y="480" font-size="88" font-weight="700" letter-spacing="-2">Open admin.html</text>
+    <text x="140" y="570" font-size="44" fill="#b9c0cf">Add pictures, put them in order, press Save.</text>
+    <text x="140" y="630" font-size="44" fill="#b9c0cf">Every screen picks it up automatically.</text>
+  </g>
+  <g transform="translate(140,720)" font-family="ui-monospace, Consolas, monospace">
+    <rect x="0" y="0" width="1040" height="110" rx="16" fill="#151a22" stroke="#2a3240"/>
+    <text x="40" y="70" font-size="40" fill="#8fb4ff">https://your-name.github.io/shop-signage/</text>
+  </g>
+</svg>

@@ -1,0 +1,16 @@
+{
+  "version": "1",
+  "settings": {
+    "defaultDuration": 10,
+    "fit": "contain",
+    "background": "#000000",
+    "transition": 700,
+    "showClock": false,
+    "pollSeconds": 60,
+    "reloadHour": 4
+  },
+  "items": [
+    { "src": "media/welcome.svg", "duration": 10 },
+    { "src": "media/how-to.svg", "duration": 10 }
+  ]
+}

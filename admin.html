@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111318">
+<meta name="robots" content="noindex">
+<title>Signage admin</title>
+<link rel="icon" href="data:,">
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --bg: #f4f5f7; --card: #fff; --ink: #14161a; --muted: #61666f;
+    --line: #e3e5ea; --line2: #d0d4dc;
+    --accent: #1a6cff; --accent-ink: #fff;
+    --ok: #10783f; --bad: #b3261e;
+    --radius: 14px;
+  }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    padding-bottom: 96px;
+  }
+  header {
+    background: #111318; color: #fff;
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    position: sticky; top: 0; z-index: 20;
+  }
+  header .brand { font-weight: 650; letter-spacing: -.01em; }
+  header .brand span { color: #8fb4ff; }
+  header .status { margin-left: auto; font-size: 13px; color: #a9b0bd; }
+  header .status b { color: #7fe3a0; font-weight: 600; }
+  main { max-width: 860px; margin: 0 auto; padding: 20px 16px 8px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px; margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(16,20,28,.04);
+  }
+  .card[hidden] { display: none; }
+  h2 { font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 16px; }
+  label.field { display: block; font-size: 13px; font-weight: 550; color: #3a3f48; }
+  label.field > span { display: block; margin-bottom: 5px; }
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; padding: 10px 12px; font: inherit; font-size: 15px;
+    border: 1px solid var(--line2); border-radius: 10px; background: #fff; color: var(--ink);
+    -webkit-appearance: none; appearance: none;
+  }
+  select { background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%2361666f' d='M1 1l5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 34px; }
+  input:focus, select:focus { outline: 2px solid #bcd2ff; outline-offset: 1px; border-color: var(--accent); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid .wide { grid-column: 1 / -1; }
+  @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+  button {
+    font: inherit; font-size: 15px; font-weight: 550;
+    padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line2);
+    background: #fff; color: var(--ink); cursor: pointer;
+  }
+  button:hover { background: #f7f8fa; }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  button.primary:hover { background: #0f5ae0; }
+  button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  button.ghost:hover { background: #eceef3; }
+  button.small { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  .hint { font-size: 13px; color: var(--muted); }
+  .hint code, .tok { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; background: #eef0f4; padding: 1px 5px; border-radius: 5px; }
+  .msg { font-size: 13.5px; margin-top: 12px; padding: 10px 12px; border-radius: 10px; display: none; }
+  .msg.show { display: block; }
+  .msg.err { background: #fdecea; color: #8c1d18; }
+  .msg.ok { background: #e8f6ee; color: #0d5c33; }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .toolbar .grow { flex: 1 1 200px; min-width: 0; }
+  .toolbar select { max-width: 100%; }
+  .drop {
+    border: 2px dashed var(--line2); border-radius: 12px; padding: 26px 18px;
+    text-align: center; color: var(--muted); background: #fafbfc; cursor: pointer;
+    transition: background .15s, border-color .15s;
+  }
+  .drop:hover, .drop.over { background: #f0f5ff; border-color: var(--accent); color: var(--accent); }
+  .drop strong { color: var(--ink); font-weight: 600; }
+  .drop.over strong { color: var(--accent); }
+  #items { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .item {
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid var(--line); border-radius: 11px; padding: 8px; background: #fff;
+  }
+  .thumb {
+    width: 84px; height: 52px; flex: 0 0 84px; border-radius: 7px; overflow: hidden;
+    background: #111318; position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb.broken img { display: none; }
+  .thumb.broken::after { content: "no preview"; font-size: 10px; color: #8b91a0; }
+  .thumb .play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .thumb .play svg { filter: drop-shadow(0 1px 4px rgba(0,0,0,.6)); }
+  .item .name { flex: 1; min-width: 0; }
+  .item .name .t { font-size: 14px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .name .p { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .dur { flex: 0 0 78px; display: flex; align-items: center; gap: 5px; }
+  .item .dur input { padding: 7px 8px; font-size: 14px; text-align: center; }
+  .item .dur span { font-size: 12px; color: var(--muted); }
+  .item .acts { display: flex; gap: 4px; }
+  .item .acts button { padding: 7px 9px; font-size: 14px; line-height: 1; border-radius: 8px; }
+  .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 24px 10px; border: 1px dashed var(--line2); border-radius: 11px; }
+  @media (max-width: 560px) {
+    .item { flex-wrap: wrap; }
+    .item .name { flex: 1 1 120px; }
+    .item .dur { flex: 0 0 70px; }
+  }
+  .settings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 620px) { .settings { grid-template-columns: 1fr; } }
+  .check { display: flex; align-items: center; gap: 9px; font-size: 14.5px; padding-top: 8px; }
+  .check input { width: 18px; height: 18px; accent-color: var(--accent); }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; font-size: 14px; color: var(--accent); font-weight: 550; }
+  details ol { font-size: 13.5px; color: #3a3f48; padding-left: 20px; line-height: 1.65; }
+  details ol code { font-family: ui-monospace, Consolas, monospace; background: #eef0f4; padding: 1px 5px; border-radius: 5px; font-size: 12.5px; }
+  .savebar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    background: rgba(255,255,255,.96); backdrop-filter: blur(8px);
+    border-top: 1px solid var(--line); padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px; justify-content: center;
+  }
+  .savebar[hidden] { display: none; }
+  .savebar .txt { font-size: 14px; color: var(--muted); }
+  .toast {
+    position: fixed; left: 50%; bottom: 88px; transform: translate(-50%, 10px);
+    background: #111318; color: #fff; font-size: 14px; padding: 11px 16px;
+    border-radius: 10px; opacity: 0; pointer-events: none; transition: all .18s;
+    z-index: 40; max-width: 90vw; text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .linkrow { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+  .linkrow input { font-size: 13px; font-family: ui-monospace, Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">Signage <span>admin</span></div>
+  <div class="status" id="status">Not connected</div>
+</header>
+
+<main>
+
+  <!-- ---------- setup ---------- -->
+  <section class="card" id="setup">
+    <h2>1. Connect to your GitHub repository</h2>
+    <p class="sub">This is remembered on this device only. You only have to do it once.</p>
+
+    <div class="grid">
+      <label class="field"><span>GitHub username</span>
+        <input id="owner" type="text" placeholder="your-username" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field"><span>Repository name</span>
+        <input id="repo" type="text" placeholder="shop-signage" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field"><span>Branch</span>
+        <input id="branch" type="text" value="main" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="field wide"><span>Fine-grained access token</span>
+        <input id="token" type="password" placeholder="github_pat_..." autocomplete="off" spellcheck="false">
+      </label>
+    </div>
+
+    <div class="row">
+      <button id="connect" class="primary" type="button">Connect</button>
+      <button id="forget" class="ghost" type="button">Forget this device</button>
+    </div>
+
+    <div class="msg" id="setupMsg"></div>
+
+    <details>
+      <summary>How do I get a token?</summary>
+      <ol>
+        <li>Go to <span class="tok">github.com/settings/personal-access-tokens/new</span> (signed in as the repo owner).</li>
+        <li>Token name: <span class="tok">signage admin</span>. Expiration: whatever you prefer (1 year is fine).</li>
+        <li>Repository access: <b>Only select repositories</b> → pick your signage repository.</li>
+        <li>Permissions → Repository permissions → <b>Contents: Read and write</b>. Leave everything else as is.</li>
+        <li>Generate token, copy it, paste it above. The token is stored only in this browser.</li>
+      </ol>
+    </details>
+  </section>
+
+  <!-- ---------- editor ---------- -->
+  <section class="card" id="editor" hidden>
+    <h2>2. Your playlist</h2>
+    <p class="sub">Add pictures or videos. They play in the order shown, on every screen pointed at this playlist.</p>
+
+    <div class="toolbar">
+      <label class="field grow" style="margin:0">
+        <span>Playlist file</span>
+        <select id="playlistFile"></select>
+      </label>
+      <button id="reloadBtn" class="small" type="button" style="margin-top:18px">Reload</button>
+    </div>
+
+    <div class="drop" id="drop" role="button" tabindex="0">
+      <strong>Tap here to add pictures or videos</strong><br>
+      or drag files onto this box &nbsp;·&nbsp; JPG, PNG, MP4
+    </div>
+    <input id="fileInput" type="file" accept="image/*,video/*" multiple hidden>
+
+    <div id="items"></div>
+
+    <div class="msg" id="editorMsg"></div>
+  </section>
+
+  <!-- ---------- settings ---------- -->
+  <section class="card" id="settingsCard" hidden>
+    <h2>3. Playback settings</h2>
+    <p class="sub">These apply to everyone using this playlist.</p>
+
+    <div class="settings">
+      <label class="field"><span>Seconds per picture</span>
+        <input id="defaultDuration" type="number" min="2" max="600" step="1" value="10">
+      </label>
+      <label class="field"><span>Screen fit</span>
+        <select id="fit">
+          <option value="contain">Fit entire picture (black bars if needed)</option>
+          <option value="cover">Fill the screen (may crop edges)</option>
+        </select>
+      </label>
+      <label class="field"><span>Daily refresh hour (0–23)</span>
+        <input id="reloadHour" type="number" min="0" max="23" step="1" value="4">
+      </label>
+      <label class="check"><input id="showClock" type="checkbox"> Show clock in the corner</label>
+    </div>
+  </section>
+
+  <!-- ---------- links ---------- -->
+  <section class="card" id="linksCard" hidden>
+    <h2>4. Screen address</h2>
+    <p class="sub">Put this address into Philips Wave (or the display's browser). Use <b>?debug=1</b> while testing to see a small status bar.</p>
+    <div class="linkrow">
+      <input id="playerUrl" type="text" readonly>
+      <button id="copyUrl" class="small" type="button">Copy</button>
+      <a id="openUrl" href="#" target="_blank" rel="noopener" class="small" style="font-size:13px">Open</a>
+    </div>
+    <p class="hint" style="margin-top:12px">
+      Tip: append <code>&amp;reload=60</code> to force the page to reload itself every 60 minutes.
+    </p>
+  </section>
+
+</main>
+
+<div class="savebar" id="savebar" hidden>
+  <span class="txt">Unsaved changes</span>
+  <button id="saveBtn" class="primary" type="button">Save playlist</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var CFG_KEY = 'signage.admin.cfg.v1';
+  var PATH_KEY = 'signage.admin.path.v1';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var state = {
+    cfg: { owner: '', repo: '', branch: 'main', token: '' },
+    playlistPath: 'playlist.json',
+    playlist: null,
+    sha: null,
+    dirty: false,
+    busy: false,
+    queue: Promise.resolve(),
+    loadingFiles: 0
+  };
+
+  /* ---------------- tiny helpers ---------------- */
+
+  function toast(text, ms) {
+    var t = $('toast');
+    t.textContent = text;
+    t.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { t.classList.remove('show'); }, ms || 3200);
+  }
+
+  function showMsg(id, kind, text) {
+    var m = $(id);
+    if (!text) { m.className = 'msg'; m.textContent = ''; return; }
+    m.className = 'msg show ' + kind;
+    m.textContent = text;
+  }
+
+  function setBusy(on) {
+    state.busy = on;
+    var buttons = document.querySelectorAll('button');
+    for (var i = 0; i < buttons.length; i++) buttons[i].disabled = on;
+  }
+
+  function slugFile(name) {
+    var dot = name.lastIndexOf('.');
+    var base = (dot > 0 ? name.slice(0, dot) : name).toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'media';
+    var ext = dot > 0 ? name.slice(dot).toLowerCase().replace(/[^.a-z0-9]/g, '') : '';
+    return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6) + '-' + base + ext;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function fileToBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var s = String(reader.result);
+        resolve(s.slice(s.indexOf(',') + 1));
+      };
+      reader.onerror = function () { reject(new Error('Could not read ' + file.name)); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function textToBase64(text) {
+    var bytes = new TextEncoder().encode(text);
+    var bin = '';
+    for (var i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(bin);
+  }
+
+  function base64ToText(b64) {
+    var bin = atob(String(b64).replace(/\s/g, ''));
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  /* ---------------- GitHub API ---------------- */
+
+  function repoApi(path) {
+    var p = path ? path.split('/').map(encodeURIComponent).join('/') : '';
+    return 'https://api.github.com/repos/' +
+      encodeURIComponent(state.cfg.owner) + '/' +
+      encodeURIComponent(state.cfg.repo) + '/contents/' + p;
+  }
+
+  function headers(extra) {
+    var h = {
+      'Accept': 'application/vnd.github+json',
+      'Authorization': 'Bearer ' + state.cfg.token,
+      'X-GitHub-Api-Version': '2022-11-28'
+    };
+    if (extra) for (var k in extra) h[k] = extra[k];
+    return h;
+  }
+
+  function describeError(status, body) {
+    if (status === 401) return 'Token rejected (401). Check the token, or it may have expired.';
+    if (status === 403) return 'GitHub refused the request (403). The token probably lacks Contents write permission, or you hit a rate limit.';
+    if (status === 404) return 'Repository or file not found (404). Check the username, repo name and branch.';
+    if (status === 409) return 'Someone else changed the playlist at the same time (409). Press Reload, then try again.';
+    if (status === 422) return 'GitHub rejected the change (422). ' + (body && body.message ? body.message : '');
+    return 'GitHub error ' + status + (body && body.message ? ': ' + body.message : '');
+  }
+
+  async function readFile(path) {
+    var res = await fetch(repoApi(path) + '?ref=' + encodeURIComponent(state.cfg.branch), {
+      headers: headers(), cache: 'no-store'
+    });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(describeError(res.status, await res.json().catch(function () { return null; })));
+    var json = await res.json();
+    return { text: base64ToText(json.content), sha: json.sha };
+  }
+
+  async function listRoot() {
+    var res = await fetch(repoApi('') + '?ref=' + encodeURIComponent(state.cfg.branch), {
+      headers: headers(), cache: 'no-store'
+    });
+    if (res.status === 404) return [];
+    if (!res.ok) throw new Error(describeError(res.status, await res.json().catch(function () { return null; })));
+    var json = await res.json();
+    return Array.isArray(json) ? json : [];
+  }
+
+  async function putFile(path, body, message, sha) {
+    var payload = { message: message, branch: state.cfg.branch, content: body };
+    if (sha) payload.sha = sha;
+    var res = await fetch(repoApi(path), {
+      method: 'PUT',
+      headers: headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(describeError(res.status, await res.json().catch(function () { return null; })));
+    return res.json();
+  }
+
+  /* ---------------- playlist model ---------------- */
+
+  function emptyPlaylist() {
+    return {
+      version: String(Date.now()),
+      settings: {
+        defaultDuration: 10,
+        fit: 'contain',
+        background: '#000000',
+        transition: 700,
+        showClock: false,
+        pollSeconds: 60,
+        reloadHour: 4
+      },
+      items: []
+    };
+  }
+
+  function normalizePlaylist(json) {
+    var p = emptyPlaylist();
+    if (!json || typeof json !== 'object') return p;
+    p.version = json.version != null ? String(json.version) : String(Date.now());
+    if (json.settings && typeof json.settings === 'object') {
+      for (var k in json.settings) p.settings[k] = json.settings[k];
+    }
+    p.items = Array.isArray(json.items) ? json.items.filter(function (it) {
+      return it && typeof it === 'object' && typeof it.src === 'string' && it.src;
+    }).map(function (it) {
+      var out = { src: it.src };
+      if (it.type === 'video') out.type = 'video';
+      if (Number(it.duration) > 0) out.duration = Number(it.duration);
+      if (it.label) out.label = String(it.label);
+      return out;
+    }) : [];
+    return p;
+  }
+
+  function markDirty() {
+    state.dirty = true;
+    updateSaveBar();
+  }
+
+  function updateSaveBar() {
+    $('savebar').hidden = !state.dirty;
+  }
+
+  /* ---------------- connect ---------------- */
+
+  async function connect() {
+    var owner = $('owner').value.trim();
+    var repo = $('repo').value.trim();
+    var branch = $('branch').value.trim() || 'main';
+    var token = $('token').value.trim();
+
+    if (!owner || !repo || !token) {
+      showMsg('setupMsg', 'err', 'Fill in username, repository and token.');
+      return;
+    }
+
+    state.cfg = { owner: owner, repo: repo, branch: branch, token: token };
+    localStorage.setItem(CFG_KEY, JSON.stringify(state.cfg));
+
+    setBusy(true);
+    showMsg('setupMsg', '', '');
+    try {
+      var entries = await listRoot();
+      var files = entries.filter(function (e) {
+        return e.type === 'file' && /^playlist.*\.json$/i.test(e.name);
+      }).map(function (e) { return e.name; });
+
+      if (!files.length) files = ['playlist.json'];
+      if (files.indexOf('playlist.json') < 0) files.unshift('playlist.json');
+
+      var savedPath = localStorage.getItem(PATH_KEY);
+      var path = files.indexOf(savedPath) >= 0 ? savedPath : files[0];
+
+      fillPlaylistSelect(files, path);
+      await openPlaylist(path);
+
+      $('setup').hidden = true;
+      $('editor').hidden = false;
+      $('settingsCard').hidden = false;
+      $('linksCard').hidden = false;
+      $('status').innerHTML = 'Connected to <b>' + escapeHtml(owner + '/' + repo) + '</b>';
+      showMsg('editorMsg', '', '');
+      toast('Connected');
+    } catch (err) {
+      showMsg('setupMsg', 'err', err.message);
+      $('status').textContent = 'Not connected';
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function fillPlaylistSelect(files, selected) {
+    var sel = $('playlistFile');
+    sel.innerHTML = '';
+    files.forEach(function (name) {
+      var opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      if (name === selected) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    var custom = document.createElement('option');
+    custom.value = '__new';
+    custom.textContent = '+ New playlist file…';
+    sel.appendChild(custom);
+  }
+
+  async function openPlaylist(path) {
+    state.playlistPath = path;
+    localStorage.setItem(PATH_KEY, path);
+
+    var file = await readFile(path);
+    state.sha = file ? file.sha : null;
+    state.playlist = file ? normalizePlaylist(JSON.parse(file.text)) : emptyPlaylist();
+    state.dirty = false;
+
+    applySettingsToUi();
+    renderItems();
+    updateLinks();
+    updateSaveBar();
+
+    if (!file) {
+      showMsg('editorMsg', 'ok', 'No ' + path + ' yet. Add media and press Save to create it.');
+    } else {
+      showMsg('editorMsg', '', '');
+    }
+  }
+
+  /* ---------------- rendering ---------------- */
+
+  function rawUrl(path) {
+    return 'https://raw.githubusercontent.com/' +
+      encodeURIComponent(state.cfg.owner) + '/' +
+      encodeURIComponent(state.cfg.repo) + '/' +
+      path.split('/').map(encodeURIComponent).join('/') + '?t=' + Date.now();
+  }
+
+  function renderItems() {
+    var list = $('items');
+    list.innerHTML = '';
+
+    var items = state.playlist.items;
+    if (!items.length) {
+      var empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = 'No slides yet — add some pictures or videos above.';
+      list.appendChild(empty);
+      return;
+    }
+
+    items.forEach(function (item, index) {
+      var row = document.createElement('div');
+      row.className = 'item';
+
+      var thumb = document.createElement('div');
+      thumb.className = 'thumb';
+      var img = document.createElement('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.src = rawUrl(item.src);
+      img.onerror = function () { thumb.classList.add('broken'); };
+      thumb.appendChild(img);
+
+      var isVideo = item.type === 'video' || /\.(mp4|webm|m4v|mov)$/i.test(item.src);
+      if (isVideo) {
+        var play = document.createElement('div');
+        play.className = 'play';
+        play.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z"/></svg>';
+        thumb.appendChild(play);
+      }
+      row.appendChild(thumb);
+
+      var name = document.createElement('div');
+      name.className = 'name';
+      var t = document.createElement('div');
+      t.className = 't';
+      t.textContent = (index + 1) + '. ' + item.src.split('/').pop();
+      var p = document.createElement('div');
+      p.className = 'p';
+      p.textContent = item.src;
+      name.appendChild(t);
+      name.appendChild(p);
+      row.appendChild(name);
+
+      var dur = document.createElement('div');
+      dur.className = 'dur';
+      var input = document.createElement('input');
+      input.type = 'number';
+      input.min = '1';
+      input.max = '600';
+      input.step = '1';
+      input.value = item.duration || '';
+      input.placeholder = String(state.playlist.settings.defaultDuration || 10);
+      input.title = 'Seconds on screen (blank = default)';
+      input.addEventListener('change', function () {
+        var v = Number(input.value);
+        if (v > 0) item.duration = Math.min(600, Math.round(v));
+        else delete item.duration;
+        markDirty();
+      });
+      var unit = document.createElement('span');
+      unit.textContent = 's';
+      dur.appendChild(input);
+      dur.appendChild(unit);
+      row.appendChild(dur);
+
+      var acts = document.createElement('div');
+      acts.className = 'acts';
+
+      var up = document.createElement('button');
+      up.type = 'button';
+      up.textContent = '\u2191';
+      up.title = 'Move up';
+      up.disabled = index === 0;
+      up.addEventListener('click', function () { moveItem(index, -1); });
+
+      var down = document.createElement('button');
+      down.type = 'button';
+      down.textContent = '\u2193';
+      down.title = 'Move down';
+      down.disabled = index === items.length - 1;
+      down.addEventListener('click', function () { moveItem(index, 1); });
+
+      var del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = '\u2715';
+      del.title = 'Remove';
+      del.addEventListener('click', function () { removeItem(index); });
+
+      acts.appendChild(up);
+      acts.appendChild(down);
+      acts.appendChild(del);
+      row.appendChild(acts);
+
+      list.appendChild(row);
+    });
+  }
+
+  function moveItem(index, delta) {
+    var items = state.playlist.items;
+    var next = index + delta;
+    if (next < 0 || next >= items.length) return;
+    var moved = items.splice(index, 1)[0];
+    items.splice(next, 0, moved);
+    renderItems();
+    markDirty();
+  }
+
+  function removeItem(index) {
+    state.playlist.items.splice(index, 1);
+    renderItems();
+    markDirty();
+  }
+
+  function applySettingsToUi() {
+    var s = state.playlist.settings;
+    $('defaultDuration').value = Number(s.defaultDuration) || 10;
+    $('fit').value = s.fit === 'cover' ? 'cover' : 'contain';
+    $('reloadHour').value = Number.isFinite(Number(s.reloadHour)) ? Number(s.reloadHour) : 4;
+    $('showClock').checked = !!s.showClock;
+  }
+
+  function collectSettings() {
+    var s = state.playlist.settings;
+    s.defaultDuration = Math.max(2, Math.min(600, Number($('defaultDuration').value) || 10));
+    s.fit = $('fit').value === 'cover' ? 'cover' : 'contain';
+    s.reloadHour = Math.max(0, Math.min(23, Number($('reloadHour').value) || 0));
+    s.showClock = $('showClock').checked;
+    if (!s.pollSeconds) s.pollSeconds = 60;
+    if (!s.transition) s.transition = 700;
+    if (!s.background) s.background = '#000000';
+  }
+
+  /* ---------------- links ---------------- */
+
+  function screenNameFor(file) {
+    if (file === 'playlist.json') return '';
+    return file.replace(/^playlist[-_]?/, '').replace(/\.json$/i, '');
+  }
+
+  function playerUrlFor(file) {
+    var dir = location.href.replace(/[^\/]*$/, '');
+    var url = dir + 'index.html';
+    var screen = screenNameFor(file);
+    if (screen) url += '?screen=' + encodeURIComponent(screen);
+    return url;
+  }
+
+  function updateLinks() {
+    var url = playerUrlFor(state.playlistPath);
+    $('playerUrl').value = url;
+    $('openUrl').href = url;
+  }
+
+  /* ---------------- upload + save ---------------- */
+
+  async function handleFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList || []);
+    if (!files.length) return;
+
+    var tooBig = files.filter(function (f) { return f.size > 25 * 1024 * 1024; });
+    var use = files.filter(function (f) { return f.size <= 25 * 1024 * 1024; });
+    if (tooBig.length) {
+      showMsg('editorMsg', 'err', tooBig.length + ' file(s) skipped because they are larger than 25 MB. Please resize videos or pictures first.');
+    }
+    if (!use.length) return;
+
+    setBusy(true);
+    var added = 0;
+    try {
+      for (var i = 0; i < use.length; i++) {
+        var file = use[i];
+        showMsg('editorMsg', 'ok', 'Uploading ' + file.name + ' (' + (i + 1) + '/' + use.length + ')…');
+        var base64 = await fileToBase64(file);
+        var path = 'media/' + slugFile(file.name);
+        await putFile(path, base64, 'Add ' + file.name);
+        var isVideo = /^video\//.test(file.type) || /\.(mp4|webm|m4v|mov)$/i.test(file.name);
+        var item = { src: path };
+        if (isVideo) item.type = 'video';
+        state.playlist.items.push(item);
+        added++;
+      }
+      renderItems();
+      markDirty();
+      await save('Add ' + added + ' item' + (added === 1 ? '' : 's') + ' to playlist');
+      toast(added + ' file' + (added === 1 ? '' : 's') + ' added');
+      showMsg('editorMsg', '', '');
+    } catch (err) {
+      showMsg('editorMsg', 'err', err.message);
+    } finally {
+      setBusy(false);
+      $('fileInput').value = '';
+    }
+  }
+
+  function save(customMessage) {
+    state.queue = state.queue.then(function () { return doSave(customMessage); }, function () { return doSave(customMessage); });
+    return state.queue;
+  }
+
+  async function doSave(customMessage) {
+    collectSettings();
+    state.playlist.version = String(Date.now());
+
+    var text = JSON.stringify(state.playlist, null, 2) + '\n';
+    var res = await putFile(
+      state.playlistPath,
+      textToBase64(text),
+      customMessage || 'Update signage playlist',
+      state.sha
+    );
+
+    state.sha = res.content.sha;
+    state.dirty = false;
+    updateSaveBar();
+    updateLinks();
+    return res;
+  }
+
+  /* ---------------- wiring ---------------- */
+
+  function bootUi() {
+    var stored = localStorage.getItem(CFG_KEY);
+    if (stored) {
+      try {
+        var cfg = JSON.parse(stored);
+        if (cfg && cfg.owner && cfg.repo && cfg.token) {
+          state.cfg = cfg;
+          $('owner').value = cfg.owner;
+          $('repo').value = cfg.repo;
+          $('branch').value = cfg.branch || 'main';
+          $('token').value = cfg.token;
+          connect();
+        }
+      } catch (e) {}
+    }
+  }
+
+  $('connect').addEventListener('click', connect);
+  $('forget').addEventListener('click', function () {
+    if (!confirm('Forget the saved token on this device?')) return;
+    localStorage.removeItem(CFG_KEY);
+    localStorage.removeItem(PATH_KEY);
+    location.reload();
+  });
+
+  $('playlistFile').addEventListener('change', function () {
+    var value = $('playlistFile').value;
+    if (value === '__new') {
+      var name = prompt('New playlist file name (for example playlist-shop2.json):', 'playlist-shop2.json');
+      if (!name) { $('playlistFile').value = state.playlistPath; return; }
+      name = name.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '-');
+      if (!/\.json$/.test(name)) name += '.json';
+      var opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      $('playlistFile').insertBefore(opt, $('playlistFile').firstChild);
+      $('playlistFile').value = name;
+      value = name;
+    }
+    if (state.dirty && !confirm('You have unsaved changes. Discard them?')) {
+      $('playlistFile').value = state.playlistPath;
+      return;
+    }
+    openPlaylist(value).catch(function (err) {
+      showMsg('editorMsg', 'err', err.message);
+    });
+  });
+
+  $('reloadBtn').addEventListener('click', function () {
+    if (!state.cfg.token) return;
+    if (state.dirty && !confirm('Discard unsaved changes and reload from GitHub?')) return;
+    openPlaylist(state.playlistPath).then(function () {
+      toast('Reloaded');
+    }).catch(function (err) {
+      showMsg('editorMsg', 'err', err.message);
+    });
+  });
+
+  $('saveBtn').addEventListener('click', function () {
+    save().then(function () {
+      toast('Saved — screens update within a minute');
+      showMsg('editorMsg', '', '');
+    }).catch(function (err) {
+      showMsg('editorMsg', 'err', err.message);
+    });
+  });
+
+  ['defaultDuration', 'fit', 'reloadHour', 'showClock'].forEach(function (id) {
+    $(id).addEventListener('change', markDirty);
+  });
+
+  var drop = $('drop');
+  drop.addEventListener('click', function () { $('fileInput').click(); });
+  drop.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileInput').click(); }
+  });
+  ['dragenter', 'dragover'].forEach(function (type) {
+    drop.addEventListener(type, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (type) {
+    drop.addEventListener(type, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) {
+    if (e.dataTransfer && e.dataTransfer.files) handleFiles(e.dataTransfer.files);
+  });
+  $('fileInput').addEventListener('change', function (e) { handleFiles(e.target.files); });
+
+  $('copyUrl').addEventListener('click', function () {
+    var input = $('playerUrl');
+    input.select();
+    var done = function () { toast('Address copied'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(input.value).then(done, function () { document.execCommand('copy'); done(); });
+    } else {
+      document.execCommand('copy');
+      done();
+    }
+  });
+
+  window.addEventListener('beforeunload', function (e) {
+    if (state.dirty) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  bootUi();
+})();
+</script>
+</body>
+</html>
